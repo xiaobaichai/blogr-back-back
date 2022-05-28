@@ -7,11 +7,13 @@ const path=require('path')
 const jwt =require('jsonwebtoken')
 
 //设置默认头像地址
-const default_avatar_path='http://localhost:3000/avatar/default.jpeg'
+// const default_avatar_path='http://localhost:3000/avatar/default.jpeg'
 //设置头像上传文件夹
 // const avatar_path='http://localhost:3000/avatar/'
+//设置富文本编辑器图片上传文件夹
+const editor_path='http://localhost:3001/editor/'
 
-//设置头像上传文件夹
+//设置轮播图上传文件夹
 const carousel_path='http://localhost:3001/carousel/'
 
 //设置jwt密钥
@@ -56,6 +58,36 @@ connection.query('SELECT 1 + 1 AS solution', function (error, results, fields) {
 // })
 
   // 接口==================================================================
+//富文本编辑器图片上传地址
+router.post('/api/updateEditorImg',(req,res,next)=>{
+    const form =formidable({
+        uploadDir:path.join(__dirname,'../uploads/editor'),
+        keepExtensions:true,
+        allowEmptyFiles:false
+    })
+    form.parse(req,(err,form_fields,files)=>{
+        if(err){
+          res.json({
+            "errno": 1, // 只要不等于 0 就行
+            "message": "图片上传失败"
+          })
+            return
+        }
+        if(!files.file){
+            res.json({
+              "errno": 1, // 只要不等于 0 就行
+              "message": "未选择图片"
+          })
+        }
+        res.json({
+              "errno": 0, // 注意：值是数字，不能是字符串
+              "data": {
+                  "url": editor_path+files.file.newFilename // 图片 src ，必须
+              }
+          })
+    })
+})
+
   //登录
   router.post('/api/login',(req,res,next)=>{
     connection.query('select nickname,avatar_src,role from admin where nickname=? and password=?',[req.body.username,req.body.password],(err,results,fields)=>{
@@ -137,9 +169,9 @@ router.get('/api/downloadCarousel',(req,res,next)=>{
 })
 
 //用户==========================================================================
-//获取用户信息
-router.get('/api/getUserData',(req,res,next)=>{
-  connection.query('select nickname as name,id from user',(err,results,fields)=>{
+//获取用户数量
+router.get('/api/getUserCount',(req,res,next)=>{
+  connection.query('select count(*) as count from user',(err,results,fields)=>{
     if(err) {
       res.json({
         code:1,
@@ -155,9 +187,46 @@ router.get('/api/getUserData',(req,res,next)=>{
   })
 })
 
+//获取用户信息
+router.get('/api/getUserData',(req,res,next)=>{
+  connection.query('select id ,nickname as name from user limit '+(req.query.page-1)*8+','+req.query.mount,(err,results,fields)=>{
+    if(err) {
+      res.json({
+        code:1,
+        message:'服务端错误'
+      })
+      return
+    }
+    res.json({
+      code:0,
+      data:results,
+      message:'ok'
+    })
+  })
+})
+
+//删除用户
+router.get('/api/deleteUser',(req,res,next)=>{
+  connection.query('delete from user where id=?',[Number(req.query.id)],(err,results,fields)=>{
+    if(err) {
+      res.json({
+        code:1,
+        message:'服务端错误'
+      })
+      console.log(err);
+      return 
+    }
+    res.json({
+      code:0,
+      message:'ok'
+    })
+  })
+})
+
 //留言========================================================================
-router.get('/api/getMessage',(req,res,next)=>{
-  connection.query('select user_id as userId,nickname as name,content,reply from message',(err,results,fields)=>{
+//获取留言总数
+router.get('/api/getMessageCount',(req,res,next)=>{
+  connection.query('select count(*) as count from message',(err,results,fields)=>{
     if(err){
       res.json({
         code:1,
@@ -168,6 +237,60 @@ router.get('/api/getMessage',(req,res,next)=>{
     res.json({
       code:0,
       data:results,
+      message:'ok'
+    })
+  })
+})
+
+//获取留言
+router.get('/api/getMessage',(req,res,next)=>{
+  connection.query('select id,nickname as name,left(content,49) as content,reply from message limit '+(req.query.page-1)*8+','+req.query.mount,(err,results,fields)=>{
+    if(err){
+      res.json({
+        code:1,
+        message:'服务端错误'
+      })
+      return
+    }
+    res.json({
+      code:0,
+      data:results,
+      message:'ok'
+    })
+  })
+})
+
+//删除留言
+router.get('/api/deleteMessage',(req,res,next)=>{
+  connection.query('delete from message where id=?',[Number(req.query.id)],(err,results,fields)=>{
+    if(err) {
+      res.json({
+        code:1,
+        message:'服务端错误'
+      })
+      console.log(err);
+      return 
+    }
+    res.json({
+      code:0,
+      message:'ok'
+    })
+  })
+})
+
+//回复留言
+router.post('/api/reply',(req,res,next)=>{
+  connection.query('update message set reply=? where id=?',[req.query.content,Number(req.query.id)],(err,results,fields)=>{
+    if(err) {
+      res.json({
+        code:1,
+        message:'服务端错误'
+      })
+      console.log(err);
+      return 
+    }
+    res.json({
+      code:0,
       message:'ok'
     })
   })
@@ -207,6 +330,99 @@ router.get('/api/getMessageCount',(req,res,next)=>{
     })
   })
 })
+
+//文章======================================================================
+//按分页获取文章
+router.get('/api/getArticle',(req,res,next)=>{
+  connection.query('select id,title,content,left(content,90) as pre_content,tag from article limit '+(req.query.page-1)*8+','+req.query.mount,(err,results,fields)=>{
+    if(err){
+      res.json({
+        code:1,
+        message:'服务端错误'
+      })
+      return
+    }
+    res.json({
+      code:0,
+      data:results,
+      message:'ok'
+    })
+  })
+})
+
+//删除文章
+router.get('/api/deleteArticle',(req,res,next)=>{
+  connection.query('delete from article where id=?',[Number(req.query.id)],(err,results,fields)=>{
+    if(err) {
+      res.json({
+        code:1,
+        message:'服务端错误'
+      })
+      console.log(err);
+      return 
+    }
+    res.json({
+      code:0,
+      message:'ok'
+    })
+  })
+})
+
+//搜索文章
+router.get('/api/searchArticle',(req,res,next)=>{
+  connection.query('select id,title,content as pre_content,tag from article where article.content like "%"'+'?'+'"%"',[req.query.keyword],(err,results,fields)=>{
+    if(err) {
+      res.json({
+        code:1,
+        message:'服务端错误'
+      })
+      console.log(err);
+      return 
+    }
+    res.json({
+      code:0,
+      data:results,
+      message:'ok'
+    })
+  })
+})
+
+//编辑文章
+router.post('/api/editArticle',(req,res,next)=>{
+  connection.query('update article set title=?,content=?,tag=?,date=? where id=?',[req.query.title,req.query.content,req.query.type,new Date(),req.query.id],(err,results,fields)=>{
+    if(err) {
+      res.json({
+        code:1,
+        message:'服务端错误'
+      })
+      console.log(err);
+      return 
+    }
+    res.json({
+      code:0,
+      message:'ok'
+    })
+  })
+})
+
+//上传文章
+router.post('/api/upLoadArticle',(req,res,next)=>{
+  connection.query('insert into article(title,content,date,tag,read_count) values (?,?,?,?,1)',[req.query.title,req.query.content,new Date(),req.query.type],(err,results,fields)=>{
+    if(err) {
+      res.json({
+        code:1,
+        message:'服务端错误'
+      })
+      console.log(err);
+      return 
+    }
+    res.json({
+      code:0,
+      message:'ok'
+    })
+  })
+})
+
 //'update carousel set src=? , description=? , link=? where id=?',[carousel_path+files.file.newFilename,form_fields.description,form_fields.link,Number(form_fields.index)]
   //为登录用户设置session
 
